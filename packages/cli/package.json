@@ -1,0 +1,22 @@
+{
+  "name": "driftdocs",
+  "version": "0.1.0",
+  "description": "Drift CLI: keep specs and code provably in sync, cheaply",
+  "type": "module",
+  "bin": {
+    "drift": "dist/main.js"
+  },
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node -e \"require('fs').chmodSync('dist/main.js', 0o755)\""
+  },
+  "dependencies": {
+    "@driftdocs/core": "0.1.0",
+    "@driftdocs/mcp": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  },
+  "license": "MIT"
+}

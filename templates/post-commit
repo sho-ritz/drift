@@ -1,0 +1,6 @@
+#!/bin/sh
+# Drift git hook (Q4/Q5: detection is git-hook driven — free, instant,
+# deterministic). Install into .git/hooks/post-commit and post-merge.
+# Re-extracts spec anchors and syncs declared links after every commit;
+# prints any stale/broken flags without blocking anything (Q7: soft nudge).
+npx --yes driftdocs check --diff HEAD~1 2>/dev/null || true

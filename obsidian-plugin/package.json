@@ -1,0 +1,16 @@
+{
+  "name": "drift-obsidian",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Drift Obsidian plugin (community plugin distribution)",
+  "main": "main.js",
+  "scripts": {
+    "build": "esbuild src/main.ts --bundle --external:obsidian --external:electron --format=cjs --target=es2022 --platform=node --outfile=main.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "obsidian": "^1.7.2",
+    "typescript": "^5.6.0"
+  },
+  "license": "MIT"
+}
