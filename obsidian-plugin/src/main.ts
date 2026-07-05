@@ -1,4 +1,6 @@
 import { execFile } from "child_process";
+import { existsSync } from "fs";
+import { dirname, join, relative, sep } from "path";
 import {
   ItemView,
   Notice,
@@ -37,10 +39,34 @@ export default class DriftPlugin extends Plugin {
 
   onunload() {}
 
-  private repoRoot(): string {
-    // vault lives inside the repo (Q16); the vault base path is a subdir of it
+  private vaultBasePath(): string {
     const adapter = this.app.vault.adapter as { basePath?: string };
     return adapter.basePath ?? ".";
+  }
+
+  /**
+   * The vault base path is a subdir of the repo (Q16) — e.g. this vault is
+   * rooted at docs/, while .drift/ and .git live one level up. Drift's
+   * links are stored repo-root-relative, so both the cwd we shell out from
+   * and any note paths we pass to `drift` must resolve against the actual
+   * repo root, not the vault's base path.
+   */
+  private repoRoot(): string {
+    let dir = this.vaultBasePath();
+    while (true) {
+      if (existsSync(join(dir, ".drift")) || existsSync(join(dir, ".git"))) {
+        return dir;
+      }
+      const parent = dirname(dir);
+      if (parent === dir) return this.vaultBasePath();
+      dir = parent;
+    }
+  }
+
+  /** Convert a vault-relative path (e.g. TFile.path) to repo-root-relative. */
+  toRepoRelativePath(vaultRelativePath: string): string {
+    const abs = join(this.vaultBasePath(), vaultRelativePath);
+    return relative(this.repoRoot(), abs).split(sep).join("/");
   }
 
   /**
@@ -153,8 +179,8 @@ class DriftStatusView extends ItemView {
     const list = el.createEl("div");
     list.createEl("p", { text: "読み込み中..." });
     try {
-      // note path relative to repo root = docsDir prefix handled by CLI config
-      const out = await this.plugin.drift(["code", file.path]);
+      const notePath = this.plugin.toRepoRelativePath(file.path);
+      const out = await this.plugin.drift(["code", notePath]);
       list.empty();
       const lines = out.trim().split("\n").filter(Boolean);
       if (lines.length === 0 || out.includes("no code linked")) {
