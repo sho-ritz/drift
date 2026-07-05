@@ -3,15 +3,19 @@ import {
   DriftEngine,
   DriftStore,
   DEFAULT_CONFIG,
+  applySuggestions,
   driftDbPath,
   installSkills,
   loadConfig,
   loadMappingFile,
   saveConfig,
   scanAnnotations,
+  suggestLinks,
   syncDeclarations,
+  validateConfig,
   writeAgentInstructions,
   type AgentKind,
+  type DriftConfig,
   type LinkEvaluation,
 } from "@driftdocs/core";
 import { execSync } from "node:child_process";
@@ -27,8 +31,27 @@ function repoRoot(): string {
   }
 }
 
-function openEngine(root: string): DriftEngine {
-  const config = loadConfig(root);
+/** Load config and enforce validation: warnings print, errors abort. */
+function loadCheckedConfig(root: string): DriftConfig {
+  let config: DriftConfig;
+  try {
+    config = loadConfig(root);
+  } catch (e) {
+    fail((e as Error).message);
+  }
+  const issues = validateConfig(root, config);
+  for (const i of issues.filter((i) => i.severity === "warning")) {
+    console.error(`drift: warning: ${i.field}: ${i.message}`);
+  }
+  const errors = issues.filter((i) => i.severity === "error");
+  if (errors.length > 0) {
+    for (const i of errors) console.error(`drift: error: ${i.field}: ${i.message}`);
+    fail("invalid .drift/config.json — fix the errors above");
+  }
+  return config;
+}
+
+function openEngine(root: string, config = loadCheckedConfig(root)): DriftEngine {
   const cgPath = join(root, config.codegraphDb);
   if (!existsSync(cgPath)) {
     fail(`CodeGraph index not found at ${config.codegraphDb}. Run: codegraph init`);
@@ -45,10 +68,14 @@ function fail(msg: string): never {
   process.exit(1);
 }
 
+/** Directories never worth scanning for spec files, even under a misconfigured docsDir. */
+const WALK_IGNORE = new Set(["node_modules", "dist", "build", "out", "vendor"]);
+
 function* walkMarkdown(dir: string): Generator<string> {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
+    if (e.name.startsWith(".") || WALK_IGNORE.has(e.name)) continue;
     const p = join(dir, e.name);
-    if (e.isDirectory() && !e.name.startsWith(".")) yield* walkMarkdown(p);
+    if (e.isDirectory()) yield* walkMarkdown(p);
     else if (e.isFile() && e.name.endsWith(".md")) yield p;
   }
 }
@@ -89,19 +116,38 @@ function printEvaluations(evals: LinkEvaluation[]): void {
   console.log(`\n${c.fresh} fresh, ${c.stale} stale, ${c.broken} broken / ${evals.length} links`);
 }
 
+function evaluationsToJson(evals: LinkEvaluation[]) {
+  return evals.map((ev) => ({
+    linkId: ev.link.id,
+    status: ev.status,
+    symbol: ev.link.symbolQualifiedName,
+    symbolFilePath: ev.link.symbolFilePath,
+    anchor: ev.link.anchorId,
+    origin: ev.link.origin,
+    drift: ev.status === "stale" ? ev.drift : undefined,
+    missing: ev.status === "broken" ? ev.missing : undefined,
+  }));
+}
+
 // ---------------------------------------------------------------------------
 
 async function cmdInit(root: string): Promise<void> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const config = { ...DEFAULT_CONFIG };
 
-  const docs = await rl.question(`Docs directory [${config.docsDir}]: `);
-  if (docs.trim()) config.docsDir = docs.trim();
+  while (true) {
+    const docs = await rl.question(`Docs directory [${config.docsDir}]: `);
+    if (docs.trim()) config.docsDir = docs.trim();
+    const errors = validateConfig(root, config).filter((i) => i.severity === "error");
+    if (errors.length === 0) break;
+    for (const i of errors) console.error(`  ! ${i.message}`);
+    config.docsDir = DEFAULT_CONFIG.docsDir;
+  }
 
   console.log("\nLink acquisition strategies (comma-separated numbers, empty = all):");
   console.log("  1. annotation   — @spec: comments in code");
   console.log("  2. mapping      — standalone .drift/links.json (non-invasive)");
-  console.log("  3. ai-suggested — on-touch AI proposals via PR bot / skills");
+  console.log("  3. ai-suggested — lexical candidates via 'drift suggest', reviewed by an agent/human");
   const strat = (await rl.question("Enable [1,2,3]: ")).trim();
   if (strat) {
     const all = ["annotation", "mapping", "ai-suggested"] as const;
@@ -136,8 +182,8 @@ async function cmdInit(root: string): Promise<void> {
 }
 
 function cmdIndex(root: string): void {
-  const config = loadConfig(root);
-  const engine = openEngine(root);
+  const config = loadCheckedConfig(root);
+  const engine = openEngine(root, config);
   const docsAbs = join(root, config.docsDir);
   if (!existsSync(docsAbs)) fail(`docs directory not found: ${config.docsDir}`);
   let files = 0;
@@ -150,34 +196,96 @@ function cmdIndex(root: string): void {
   console.log(`indexed ${anchors} anchors from ${files} spec files under ${config.docsDir}/`);
 }
 
+/**
+ * Code files to scan for @spec: annotations: tracked files PLUS untracked
+ * files that aren't git-ignored (--others --exclude-standard), so a brand-new
+ * file's annotations are picked up before its first commit.
+ */
+function annotationScanFiles(root: string, config: DriftConfig): string[] {
+  return execSync("git ls-files --cached --others --exclude-standard", {
+    cwd: root,
+    encoding: "utf8",
+  })
+    .split("\n")
+    .filter((f) => f && !f.endsWith(".md") && !f.startsWith(config.docsDir + "/"));
+}
+
 function cmdSync(root: string): void {
-  const config = loadConfig(root);
-  const engine = openEngine(root);
+  const config = loadCheckedConfig(root);
+  const engine = openEngine(root, config);
   const decls = [];
+  const warnings: string[] = [];
+  let scanned = 0;
   if (config.strategies.includes("annotation")) {
-    const codeFiles = execSync("git ls-files", { cwd: root, encoding: "utf8" })
-      .split("\n")
-      .filter((f) => f && !f.endsWith(".md") && !f.startsWith(config.docsDir + "/"));
-    decls.push(...scanAnnotations(engine, codeFiles));
+    const scan = scanAnnotations(engine, annotationScanFiles(root, config));
+    decls.push(...scan.declarations);
+    warnings.push(...scan.warnings);
+    scanned = scan.scannedFiles;
   }
   if (config.strategies.includes("mapping")) {
     decls.push(...loadMappingFile(root));
   }
   const r = syncDeclarations(engine, decls);
-  console.log(`sync: ${r.created} created, ${r.kept} kept`);
+  console.log(
+    `sync: scanned ${scanned} files (tracked + untracked), ` +
+      `${decls.length} declarations, ${r.created} created, ${r.kept} kept`,
+  );
+  for (const w of warnings) console.error(`  ~ ${w}`);
   for (const e of r.errors) console.error(`  ! ${e}`);
   if (r.errors.length > 0) process.exit(1);
 }
 
+function cmdSuggest(root: string, args: string[]): void {
+  const config = loadCheckedConfig(root);
+  if (!config.strategies.includes("ai-suggested")) {
+    fail(`the 'ai-suggested' strategy is disabled in .drift/config.json`);
+  }
+  const engine = openEngine(root, config);
+  const minConfidence = args.includes("--min-high") ? "high" : undefined;
+  const suggestions = suggestLinks(engine, { minConfidence });
+  const json = args.includes("--json");
+
+  if (suggestions.length === 0) {
+    console.log(json ? "[]" : "no link candidates found (index docs and code first)");
+    return;
+  }
+  if (args.includes("--apply")) {
+    const r = applySuggestions(engine, suggestions, process.env.USER ?? "suggest");
+    console.log(`suggest: created ${r.created} links (origin: ai-suggested)`);
+    for (const e of r.errors) console.error(`  ! ${e}`);
+    return;
+  }
+  if (json) {
+    console.log(JSON.stringify(suggestions, null, 2));
+    return;
+  }
+  for (const s of suggestions) {
+    console.log(
+      `${s.confidence === "high" ? "●" : "○"} [${s.confidence}] ${s.symbol} ↔ ${s.anchorId}\n` +
+        `    ${s.reason}  (${s.symbolKind} in ${s.symbolFilePath})`,
+    );
+  }
+  console.log(
+    `\n${suggestions.length} candidate(s). Review, then: drift suggest --apply  ` +
+      `(or link individually: drift link <symbol> <anchor>)`,
+  );
+}
+
 function cmdStatus(root: string, args: string[]): void {
   const engine = openEngine(root);
+  const json = args.includes("--json");
   const diffIdx = args.indexOf("--diff");
-  if (diffIdx !== -1) {
-    const base = args[diffIdx + 1]?.startsWith("--") ? undefined : args[diffIdx + 1];
-    printEvaluations(engine.evaluateForChangedFiles(changedFiles(root, base)));
-  } else {
-    printEvaluations(engine.evaluateAll());
-  }
+  const evals =
+    diffIdx !== -1
+      ? engine.evaluateForChangedFiles(
+          changedFiles(
+            root,
+            args[diffIdx + 1]?.startsWith("--") ? undefined : args[diffIdx + 1],
+          ),
+        )
+      : engine.evaluateAll();
+  if (json) console.log(JSON.stringify(evaluationsToJson(evals), null, 2));
+  else printEvaluations(evals);
 }
 
 function cmdContext(root: string, symbol: string | undefined, json: boolean): void {
@@ -203,16 +311,23 @@ function cmdContext(root: string, symbol: string | undefined, json: boolean): vo
   }
 }
 
-function cmdCode(root: string, anchor: string | undefined): void {
-  if (!anchor) fail("usage: drift code <docs/file.md[#anchor]>");
+function cmdCode(root: string, args: string[]): void {
+  const anchor = args.filter((a) => !a.startsWith("--"))[0];
+  if (!anchor) fail("usage: drift code <docs/file.md[#anchor]> [--json]");
   const engine = openEngine(root);
   const rows = engine.codeForSpec(anchor);
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(rows, null, 2));
+    return;
+  }
   if (rows.length === 0) {
     console.log(`no code linked to ${anchor}`);
     return;
   }
   for (const r of rows) {
-    console.log(`${STATUS_ICON[r.status]} ${r.symbol}  (${r.filePath})  ← ${r.anchorId}`);
+    console.log(
+      `${STATUS_ICON[r.status]} [${r.linkId}] ${r.symbol}  (${r.filePath})  ← ${r.anchorId}`,
+    );
   }
 }
 
@@ -283,6 +398,9 @@ switch (cmd) {
   case "sync":
     cmdSync(root);
     break;
+  case "suggest":
+    cmdSuggest(root, rest);
+    break;
   case "check":
     cmdIndex(root);
     cmdSync(root);
@@ -295,7 +413,7 @@ switch (cmd) {
     cmdContext(root, rest.filter((a) => a !== "--json")[0], rest.includes("--json"));
     break;
   case "code":
-    cmdCode(root, rest[0]);
+    cmdCode(root, rest);
     break;
   case "link":
     cmdLink(root, rest[0], rest[1]);
@@ -319,10 +437,15 @@ usage:
   drift init                     interactive setup (agents, strategies, docs dir)
   drift index                    extract spec anchors from docs into .drift/drift.db
   drift sync                     apply @spec: annotations + .drift/links.json
+                                 (scans tracked AND untracked non-ignored files)
+  drift suggest [--apply] [--min-high] [--json]
+                                 propose links by matching symbols to spec text
   drift check                    index + sync + status (git-hook entry point)
-  drift status [--diff [base]]   fresh/stale/broken for all or changed-file links
+  drift status [--diff [base]] [--json]
+                                 fresh/stale/broken for all or changed-file links
   drift context <symbol> [--json]  spec sections for a symbol (code → spec)
-  drift code <file.md[#anchor]>  symbols implementing a spec section (spec → code)
+  drift code <file.md[#anchor]> [--json]
+                                 symbols implementing a spec section (spec → code)
   drift link <symbol> <anchor>   create a link, pinned at current hashes
   drift approve <link-id>        re-pin a stale link as still-correct
   drift unlink <link-id>         remove a broken/obsolete link

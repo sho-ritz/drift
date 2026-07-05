@@ -5,6 +5,7 @@ import { DriftStore } from "./store.js";
 import type {
   Link,
   LinkEvaluation,
+  LinkStatus,
   SpecContext,
   Symbol,
 } from "./types.js";
@@ -149,19 +150,25 @@ export class DriftEngine {
 
   /** All symbols documented by a spec anchor (or any anchor in a file). */
   codeForSpec(anchorOrFile: string): Array<{
+    linkId: number;
     anchorId: string;
+    heading: string;
     symbol: string;
     filePath: string;
-    status: string;
+    status: LinkStatus;
+    origin: Link["origin"];
   }> {
     const links = anchorOrFile.includes("#")
       ? this.store.linksForAnchor(anchorOrFile)
       : this.store.linksForSpecFile(anchorOrFile);
     return links.map((link) => ({
+      linkId: link.id,
       anchorId: link.anchorId,
+      heading: this.store.getAnchor(link.anchorId)?.heading ?? "(missing)",
       symbol: link.symbolQualifiedName,
       filePath: link.symbolFilePath,
       status: this.evaluateLink(link).status,
+      origin: link.origin,
     }));
   }
 

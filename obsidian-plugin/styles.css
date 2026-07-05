@@ -1,0 +1,234 @@
+/* Drift status panel */
+
+.drift-panel {
+  padding: 8px 12px;
+}
+
+.drift-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.drift-title {
+  margin: 0;
+}
+
+.drift-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.drift-icon-btn {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 4px;
+  color: var(--icon-color);
+  cursor: pointer;
+}
+
+.drift-icon-btn:hover {
+  color: var(--icon-color-hover);
+  background: var(--background-modifier-hover);
+  border-radius: var(--radius-s);
+}
+
+.drift-publish-btn {
+  font-size: var(--font-ui-small);
+}
+
+.drift-note-name {
+  font-weight: 600;
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* summary chips */
+
+.drift-summary {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.drift-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--font-ui-smaller);
+  background: var(--background-secondary);
+  color: var(--text-muted);
+}
+
+.drift-chip-count {
+  font-weight: 700;
+  color: var(--text-normal);
+}
+
+.drift-chip-fresh .drift-chip-count {
+  color: var(--color-green);
+}
+
+.drift-chip-stale .drift-chip-count {
+  color: var(--color-orange);
+}
+
+.drift-chip-broken .drift-chip-count {
+  color: var(--color-red);
+}
+
+/* sections (one per spec anchor) */
+
+.drift-section {
+  margin-bottom: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  overflow: hidden;
+}
+
+.drift-section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--background-secondary);
+  font-size: var(--font-ui-small);
+}
+
+.drift-section-icon {
+  display: flex;
+  color: var(--text-faint);
+}
+
+.drift-section-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.drift-section-heading {
+  font-weight: 600;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drift-section-anchor {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  font-family: var(--font-monospace);
+}
+
+/* link rows */
+
+.drift-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.drift-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.drift-symbol {
+  display: block;
+  font-size: var(--font-ui-small);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: transparent;
+  padding: 0;
+}
+
+.drift-file {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drift-badge {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: var(--font-ui-smaller);
+  font-weight: 600;
+  cursor: help;
+}
+
+.drift-badge-fresh {
+  background: rgba(var(--color-green-rgb), 0.15);
+  color: var(--color-green);
+}
+
+.drift-badge-stale {
+  background: rgba(var(--color-orange-rgb), 0.15);
+  color: var(--color-orange);
+}
+
+.drift-badge-broken {
+  background: rgba(var(--color-red-rgb), 0.15);
+  color: var(--color-red);
+}
+
+.drift-row-actions {
+  flex-shrink: 0;
+}
+
+.drift-approve-btn,
+.drift-unlink-btn {
+  font-size: var(--font-ui-smaller);
+  padding: 2px 8px;
+  height: auto;
+}
+
+.drift-unlink-btn:hover {
+  color: var(--color-red);
+}
+
+/* states */
+
+.drift-loading,
+.drift-empty {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  padding: 8px 0;
+}
+
+.drift-error {
+  color: var(--text-error);
+  font-size: var(--font-ui-small);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
+}
+
+.drift-error code {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.drift-error-hint {
+  color: var(--text-muted);
+}
+
+.drift-footer {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  margin-top: 4px;
+}

@@ -2,76 +2,125 @@
 
 [![npm](https://img.shields.io/npm/v/driftdocs)](https://www.npmjs.com/package/driftdocs)
 
-仕様書とコードの対応関係を、人手の運用ルールではなく機械的に検知・維持する仕組み。
+Detect and maintain the correspondence between specs and code mechanically, instead of
+relying on human process.
 
-コード⇄仕様書の探索を「クエリのたびに文書全体を読む全文検索」から「事前計算済みグラフの
-インデックス参照」に置き換えることで、AIエージェントのトークン使用量を構造的に削減する。
-判定はすべてハッシュ比較で行い、LLM呼び出しは平常時ゼロ。
+Drift replaces code⇄spec exploration — "full-text search that re-reads entire documents
+on every query" — with indexed lookups over a precomputed graph, structurally reducing
+the token usage of AI agents. All judgments are hash comparisons; zero LLM calls in
+steady state.
 
-## 構成
+## Layout
 
 ```
-packages/core     判定エンジン: アンカー抽出・ハッシュ・グラフストア・探索 (共有コア)
-packages/cli      driftdocs (npm) — drift コマンド
-packages/mcp      MCPサーバー: drift_context / drift_code / drift_status / drift_diff / drift_approve
-obsidian-plugin   非エンジニア向け: ステータスパネル + 公開ボタン (コミュニティプラグイン配布)
+packages/core     judgment engine: anchor extraction, hashing, graph store, lookup (shared core)
+packages/cli      driftdocs (npm) — the `drift` command
+packages/mcp      MCP server: drift_context / drift_code / drift_status / drift_diff / drift_approve / drift_suggest
+obsidian-plugin   for non-engineers: status panel with one-click approve + publish button (community plugin)
 templates/        GitHub Actions PR bot / git hook
 ```
 
-Drift は [CodeGraph](https://www.npmjs.com/package/@colbymchenry/codegraph) の拡張として動く。
-シンボル解析は CodeGraph のインデックス (`.codegraph/codegraph.db`) を読み取り専用で再利用し、
-Drift 自身は `.drift/drift.db` に spec アンカー・corresponds_to リンク・承認ログだけを持つ。
+Drift runs as an extension of [CodeGraph](https://www.npmjs.com/package/@colbymchenry/codegraph).
+Symbol analysis reuses the CodeGraph index (`.codegraph/codegraph.db`) read-only;
+Drift itself stores only spec anchors, corresponds_to links, and the approval log in
+`.drift/drift.db`.
 
-## データモデル
+## Data model
 
-- **SpecAnchor** — markdown の見出しから自動導出されるセクション (`docs/auth.md#token-refresh`)。
-  本文をキャッシュして持つので、コンテキスト取得時に文書を再読しない。
-  見出しが曖昧な場合のみ `<!-- drift-anchor: name -->` で明示できる。
-- **Link** — シンボル ↔ アンカーの多対多エッジ。承認時点の両側ハッシュ
-  (コードは整形ノイズを正規化したもの) をピン留めする。
-- **Status** — `fresh` (両側不変) / `stale` (どちらかが編集された) / `broken` (どちらかが消失)。
+- **SpecAnchor** — a section derived automatically from a markdown heading
+  (`docs/auth.md#token-refresh`). Section bodies are cached, so context queries never
+  re-read documents. When a heading is ambiguous, override the slug explicitly with
+  `<!-- drift-anchor: name -->`.
+- **Link** — a many-to-many edge between a symbol and an anchor. Pins the hash of both
+  sides at approval time (code is normalized to ignore formatting noise).
+- **Status** — `fresh` (neither side changed) / `stale` (either side was edited) /
+  `broken` (either side disappeared).
 
-## 使い方
+## Usage
 
 ```sh
-npm i -D driftdocs    # インストール後は bin 名 `drift` で呼べる
-                      # (未インストールで使う場合は `npx driftdocs <cmd>`)
-npx drift init        # エージェント (claude-code/codex/gemini-cli)・戦略を選択
-                      #   → CLAUDE.md 等に指示ブロックを冪等追記、skills を導入
-npx drift index       # docs/ からアンカー抽出
-npx drift sync        # @spec: アノテーション + .drift/links.json を反映
-npx drift status      # 全リンクの fresh/stale/broken
-npx drift context AuthService::refreshToken   # コード → 仕様 (階層フォールバック付き)
-npx drift code docs/auth.md#login-flow        # 仕様 → コード
-npx drift approve 3   # stale リンクを「まだ正しい」と再承認
-npx drift mcp         # MCPサーバー起動 (stdio)
+npm i -D driftdocs    # installs bin name `drift`
+                      # (without installing, use `npx driftdocs <cmd>`)
+npx drift init        # choose agents (claude-code/codex/gemini-cli) and strategies
+                      #   → idempotently appends an instruction block to CLAUDE.md etc., installs skills
+npx drift index       # extract anchors from docs/
+npx drift sync        # apply @spec: annotations + .drift/links.json
+                      #   (scans tracked AND untracked non-ignored files)
+npx drift suggest     # propose links by matching symbol names against spec text
+npx drift status      # fresh/stale/broken for every link
+npx drift context AuthService::refreshToken   # code → spec (with hierarchical fallback)
+npx drift code docs/auth.md#login-flow        # spec → code
+npx drift approve 3   # re-approve a stale link as "still correct"
+npx drift mcp         # start the MCP server (stdio)
 ```
 
-リンク宣言はコード側アノテーションでも:
+Links can be declared with a code-side annotation:
 
 ```ts
 // @spec: docs/auth.md#login-flow
 async login(user: string, password: string): Promise<string> {
 ```
 
-外部マッピングファイル (`.drift/links.json`) でも宣言できる (非侵襲):
+The annotation binds to the nearest *linkable* symbol below it (function, class,
+method, component, …). If it would bind to something else — a type alias or a
+constant — or sits suspiciously far from its symbol, `drift sync` prints a warning
+instead of silently creating a wrong link.
+
+Links can also be declared in an external mapping file (`.drift/links.json`,
+non-invasive):
 
 ```json
 [{ "symbol": "AuthService::login", "spec": "docs/auth.md#login-flow" }]
 ```
 
+### Bootstrapping an existing codebase
+
+Hand-annotating a large codebase is the main adoption cost, so the `ai-suggested`
+strategy generates candidates mechanically:
+
+```sh
+npx drift suggest             # list candidates with confidence + reason
+npx drift suggest --min-high  # only code-span / heading matches
+npx drift suggest --apply     # create all candidates (origin: ai-suggested)
+```
+
+Candidates come from deterministic lexical matching — a spec section mentioning
+`` `refreshToken` `` in a code span, or a heading whose slug matches a symbol name —
+so the pass is free (no LLM). Review the list (or let an agent review it via the
+`drift_suggest` MCP tool), then apply.
+
 ## PR bot
 
-`templates/drift-pr-bot.yml` を `.github/workflows/` にコピーすると、PRで変更された
-ファイルに紐づくリンクだけを評価し、stale/broken をPRコメントで通知する
-(マージはブロックしない)。常駐サーバーは不要。
+Copy `templates/drift-pr-bot.yml` into `.github/workflows/` and each PR gets a comment
+evaluating only the links touched by its changed files, flagging stale/broken ones
+(without blocking the merge). No hosted server required.
 
-## 設計ドキュメント
+## Obsidian plugin
 
-設計判断の全記録は設計サマリー (Artifact) を参照。要点:
+The status panel shows, for the open note, every linked code symbol grouped by spec
+section with fresh/stale/broken badges, one-click **Still correct** re-approval,
+**Remove link** for broken links, and a **Publish** button (git add/commit/push).
+The plugin shells out to the `drift` CLI, so all judgment logic stays in one place.
+Configure the CLI command, commit message, and push behavior in the plugin settings.
 
-- 検知はハッシュ比較のみ、LLMは人間の確認段階でだけ使う
-- 探索は O(エッジ次数) のインデックス参照。直接リンクがなければ包含関係を遡って
-  `inferred: true` 付きで返す
-- 仕様書は Obsidian (git 管理下の `/docs`)。公開ボタンが唯一のコミット契機
-- 未リンクのシンボルは一括バッチではなく、PRで触られた箇所から漸進的にリンクする
+## Design notes
+
+Key decisions (the full design record lives in the design summary Artifact):
+
+- Detection is hash comparison only; LLMs enter only at the human-confirmation step
+- Lookup is an O(edge-degree) index read. When a symbol has no direct link, Drift
+  climbs the containment chain and returns the result marked `inferred: true`
+- Specs live in Obsidian (a git-managed `/docs`). The Publish button is the only
+  commit trigger
+- Unlinked symbols are linked incrementally from spots touched by PRs — plus
+  `drift suggest` for the initial bulk pass — never a mandatory big-bang batch
+- `.drift/config.json` is validated on every command: a `docsDir` pointing at the
+  repo root (which would index node_modules) is rejected outright
+
+## Development
+
+```sh
+npm install
+npm run build     # all workspaces
+npm test          # unit tests (packages/core)
+```

@@ -8,6 +8,7 @@ import {
   loadConfig,
   normalizeCode,
   hashCode,
+  suggestLinks,
 } from "@driftdocs/core";
 import { join } from "node:path";
 import { z } from "zod";
@@ -148,6 +149,22 @@ export async function serve(repoRoot: string): Promise<void> {
       const ev = engine.approve(linkId, actor ?? "mcp");
       return text({ linkId, status: ev.status });
     },
+  );
+
+  server.registerTool(
+    "drift_suggest",
+    {
+      description:
+        "Candidate spec↔code links found by deterministic lexical matching (symbol names vs anchor headings/bodies). Use to bootstrap links on an existing codebase. Review each candidate — read the spec section and the symbol — then create the ones that hold with drift_link semantics via CLI 'drift link', or approve in bulk with 'drift suggest --apply'.",
+      inputSchema: {
+        minConfidence: z
+          .enum(["high", "medium"])
+          .optional()
+          .describe("filter: 'high' returns only code-span/heading matches"),
+      },
+    },
+    async ({ minConfidence }) =>
+      text(suggestLinks(engine, { minConfidence: minConfidence === "high" ? "high" : undefined })),
   );
 
   const transport = new StdioServerTransport();

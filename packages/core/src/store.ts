@@ -130,6 +130,23 @@ export class DriftStore {
     };
   }
 
+  allAnchors(): SpecAnchor[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM spec_anchors ORDER BY file_path, start_line`)
+      .all() as Record<string, unknown>[];
+    return rows.map((r) => ({
+      id: r.id as string,
+      filePath: r.file_path as string,
+      slug: r.slug as string,
+      heading: r.heading as string,
+      headingLevel: r.heading_level as number,
+      startLine: r.start_line as number,
+      endLine: r.end_line as number,
+      body: r.body as string,
+      bodyHash: r.body_hash as string,
+    }));
+  }
+
   listAnchorFiles(): string[] {
     return (
       this.db.prepare(`SELECT DISTINCT file_path FROM spec_anchors`).all() as {

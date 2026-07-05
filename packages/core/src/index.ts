@@ -5,6 +5,7 @@ export * from "./codegraph.js";
 export * from "./store.js";
 export * from "./engine.js";
 export * from "./strategies.js";
+export * from "./suggest.js";
 export * from "./config.js";
 export * from "./instructions.js";
 export * from "./skills.js";

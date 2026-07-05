@@ -84,6 +84,20 @@ export class CodeGraphReader {
     return rows.map((r) => this.toSymbol(r));
   }
 
+  /** All non-file, non-import symbols in the index, optionally filtered by kind. */
+  listSymbols(kinds?: string[]): Symbol[] {
+    const base = `SELECT id, kind, name, qualified_name, file_path, start_line, end_line, signature
+       FROM nodes WHERE kind NOT IN ('file','import')`;
+    const rows = (
+      kinds && kinds.length > 0
+        ? this.db
+            .prepare(`${base} AND kind IN (${kinds.map(() => "?").join(",")}) ORDER BY file_path, start_line`)
+            .all(...kinds)
+        : this.db.prepare(`${base} ORDER BY file_path, start_line`).all()
+    ) as NodeRow[];
+    return rows.map((r) => this.toSymbol(r));
+  }
+
   /**
    * Containment chain for hierarchical fallback (Q21): the symbols in the
    * same file that strictly enclose this one, innermost first, ending with

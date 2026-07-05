@@ -1,7 +1,7 @@
 {
   "id": "drift-spec-sync",
   "name": "Drift",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "minAppVersion": "1.4.0",
   "description": "Shows which code implements each spec section, flags stale/broken links, and publishes doc edits with one click.",
   "author": "drift",
