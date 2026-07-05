@@ -3,6 +3,7 @@ import { existsSync } from "fs";
 import { dirname, join, relative, sep } from "path";
 import {
   App,
+  FileSystemAdapter,
   ItemView,
   Notice,
   Plugin,
@@ -100,8 +101,8 @@ export default class DriftPlugin extends Plugin {
   }
 
   private vaultBasePath(): string {
-    const adapter = this.app.vault.adapter as { basePath?: string };
-    return adapter.basePath ?? ".";
+    const adapter = this.app.vault.adapter;
+    return adapter instanceof FileSystemAdapter ? adapter.getBasePath() : ".";
   }
 
   /**
