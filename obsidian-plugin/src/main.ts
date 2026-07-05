@@ -43,12 +43,22 @@ export default class DriftPlugin extends Plugin {
     return adapter.basePath ?? ".";
   }
 
-  drift(args: string[]): Promise<string> {
+  /**
+   * GUI apps on macOS/Linux don't inherit the user's shell PATH (no .zshrc/.bashrc
+   * sourcing), so tools installed via nvm/mise/volta/homebrew are often not found
+   * by a plain execFile. Running through a login+interactive shell picks up the
+   * same PATH the user gets in a terminal.
+   */
+  private shellExec(cmd: string, args: string[], cwd: string, timeoutMs: number): Promise<string> {
     return new Promise((resolve, reject) => {
+      const shell = process.env.SHELL || "/bin/zsh";
+      const quoted = [cmd, ...args]
+        .map((a) => `'${a.replace(/'/g, `'\\''`)}'`)
+        .join(" ");
       execFile(
-        "npx",
-        ["--yes", "driftdocs", ...args],
-        { cwd: this.repoRoot(), timeout: 30_000 },
+        shell,
+        ["-ilc", quoted],
+        { cwd, timeout: timeoutMs },
         (err, stdout, stderr) => {
           if (err && !stdout) reject(new Error(stderr || err.message));
           else resolve(stdout);
@@ -57,18 +67,12 @@ export default class DriftPlugin extends Plugin {
     });
   }
 
+  drift(args: string[]): Promise<string> {
+    return this.shellExec("npx", ["--yes", "driftdocs", ...args], this.repoRoot(), 30_000);
+  }
+
   git(args: string[]): Promise<string> {
-    return new Promise((resolve, reject) => {
-      execFile(
-        "git",
-        args,
-        { cwd: this.repoRoot(), timeout: 60_000 },
-        (err, stdout, stderr) => {
-          if (err) reject(new Error(stderr || err.message));
-          else resolve(stdout);
-        },
-      );
-    });
+    return this.shellExec("git", args, this.repoRoot(), 60_000);
   }
 
   /** Q17: publishing is an explicit checkpoint, not a save-time side effect. */
