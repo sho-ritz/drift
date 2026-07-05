@@ -8,8 +8,13 @@ export const DEFAULT_CONFIG: DriftConfig = {
   docsDir: "docs",
   strategies: ["annotation", "mapping", "ai-suggested"],
   agents: ["claude-code"],
+  // "codegraph" when a CodeGraph index exists, otherwise the CLI falls back
+  // to the built-in tree-sitter indexer at engine-open time.
+  backend: "codegraph",
   codegraphDb: ".codegraph/codegraph.db",
 };
+
+const KNOWN_BACKENDS = new Set(["codegraph", "builtin"]);
 
 const KNOWN_STRATEGIES = new Set(["annotation", "mapping", "ai-suggested"]);
 const KNOWN_AGENTS = new Set(["claude-code", "codex", "gemini-cli"]);
@@ -26,6 +31,7 @@ export interface ConfigIssue {
  * most importantly docsDir pointing at the repo root, which drags
  * node_modules and every stray markdown file into the anchor index.
  */
+// @spec: docs/design.md#configuration-validation
 export function validateConfig(repoRoot: string, config: DriftConfig): ConfigIssue[] {
   const issues: ConfigIssue[] = [];
 
@@ -65,6 +71,14 @@ export function validateConfig(repoRoot: string, config: DriftConfig): ConfigIss
         message: `docsDir "${config.docsDir}" does not exist yet.`,
       });
     }
+  }
+
+  if (config.backend && !KNOWN_BACKENDS.has(config.backend)) {
+    issues.push({
+      severity: "error",
+      field: "backend",
+      message: `unknown backend "${config.backend}" (known: ${[...KNOWN_BACKENDS].join(", ")}).`,
+    });
   }
 
   for (const s of config.strategies) {

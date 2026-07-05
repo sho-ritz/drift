@@ -5,7 +5,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run build -w @driftdocs/core && npm run build -w @driftdocs/mcp && npm run build -w driftdocs",
     "test": "npm run test --workspaces --if-present"
   },
   "engines": {

@@ -14,7 +14,10 @@
     "test": "node --test \"dist/test/*.test.js\""
   },
   "dependencies": {
-    "better-sqlite3": "^12.2.0"
+    "@anthropic-ai/sdk": "^0.110.0",
+    "better-sqlite3": "^12.2.0",
+    "tree-sitter-wasms": "^0.1.13",
+    "web-tree-sitter": "^0.24.7"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

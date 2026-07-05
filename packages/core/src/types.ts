@@ -58,6 +58,12 @@ export interface LinkEvaluation {
   drift: { symbol: boolean; anchor: boolean };
   /** which side disappeared (only for broken) */
   missing: { symbol: boolean; anchor: boolean };
+  /**
+   * When the symbol vanished but another symbol's current source hashes to
+   * the approved hash, this names the likely rename target (fix with
+   * `drift relink`).
+   */
+  movedTo?: { symbol: string; filePath: string };
 }
 
 /**
@@ -80,6 +86,9 @@ export interface SpecContext {
   freshness: { fresh: number; total: number };
 }
 
+/** Which symbol index Drift reads. */
+export type SymbolBackend = "codegraph" | "builtin";
+
 export interface DriftConfig {
   /** repo-relative path to the docs vault (Q16) */
   docsDir: string;
@@ -87,8 +96,15 @@ export interface DriftConfig {
   strategies: LinkOrigin[];
   /** agents whose instruction files drift manages (Q23) */
   agents: AgentKind[];
-  /** path to CodeGraph db, relative to repo root */
+  /**
+   * symbol index backend: "codegraph" reuses .codegraph/codegraph.db;
+   * "builtin" uses drift's own tree-sitter indexer (no external dependency)
+   */
+  backend?: SymbolBackend;
+  /** path to CodeGraph db, relative to repo root (codegraph backend only) */
   codegraphDb: string;
+  /** drift verify settings (LLM semantic check of stale links) */
+  verify?: { model?: string };
 }
 
 export type AgentKind = "claude-code" | "codex" | "gemini-cli";

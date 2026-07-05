@@ -1,6 +1,6 @@
 {
   "name": "driftdocs",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Keep specs and code provably in sync. A CodeGraph extension that links code symbols to spec sections, detects drift by hash comparison, and serves AI agents low-token context via MCP.",
   "keywords": [
     "documentation",
@@ -22,12 +22,15 @@
     "README.md"
   ],
   "scripts": {
-    "build": "esbuild src/main.ts --bundle --format=esm --platform=node --target=node20 --external:better-sqlite3 --external:@modelcontextprotocol/sdk --external:zod --outfile=dist/main.js --banner:js='#!/usr/bin/env node' && node -e \"require('fs').chmodSync('dist/main.js', 0o755)\"",
+    "build": "esbuild src/main.ts --bundle --format=esm --platform=node --target=node20 --external:better-sqlite3 --external:@modelcontextprotocol/sdk --external:zod --external:web-tree-sitter --external:tree-sitter-wasms --external:@anthropic-ai/sdk --outfile=dist/main.js --banner:js='#!/usr/bin/env node' && node -e \"require('fs').chmodSync('dist/main.js', 0o755)\"",
     "prepublishOnly": "npm run build && rm -rf templates && cp -R ../../templates ./templates && cp ../../README.md ./README.md"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
     "@modelcontextprotocol/sdk": "^1.12.0",
     "better-sqlite3": "^12.2.0",
+    "tree-sitter-wasms": "^0.1.13",
+    "web-tree-sitter": "0.24.7",
     "zod": "^3.24.0"
   },
   "devDependencies": {

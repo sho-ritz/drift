@@ -2,7 +2,10 @@ node_modules/
 dist/
 *.tsbuildinfo
 .DS_Store
-.drift/
+# .drift/config.json and .drift/drift.db are committed (dogfooding: the
+# links + approval log ARE the state CI checks); only sqlite side files stay out
+.drift/*.db-wal
+.drift/*.db-shm
 obsidian-plugin/main.js
 packages/cli/templates/
 packages/cli/README.md

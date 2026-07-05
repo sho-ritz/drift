@@ -4,22 +4,36 @@ import {
   CodeGraphReader,
   DriftEngine,
   DriftStore,
+  SUPPORTED_EXTENSIONS,
+  TreeSitterIndex,
+  coverage,
   driftDbPath,
   loadConfig,
   normalizeCode,
-  hashCode,
   suggestLinks,
+  type SymbolIndex,
 } from "@driftdocs/core";
+import { execSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 
-function openEngine(repoRoot: string): DriftEngine {
+async function openEngine(repoRoot: string): Promise<DriftEngine> {
   const config = loadConfig(repoRoot);
-  return new DriftEngine(
-    new CodeGraphReader(join(repoRoot, config.codegraphDb), repoRoot),
-    new DriftStore(driftDbPath(repoRoot)),
-    repoRoot,
-  );
+  const cgPath = join(repoRoot, config.codegraphDb);
+  let index: SymbolIndex;
+  if ((config.backend ?? "codegraph") === "codegraph" && existsSync(cgPath)) {
+    index = new CodeGraphReader(cgPath, repoRoot);
+  } else {
+    const files = execSync("git ls-files --cached --others --exclude-standard", {
+      cwd: repoRoot,
+      encoding: "utf8",
+    })
+      .split("\n")
+      .filter((f) => f && SUPPORTED_EXTENSIONS.some((ext) => f.endsWith(ext)));
+    index = await TreeSitterIndex.create(repoRoot, files);
+  }
+  return new DriftEngine(index, new DriftStore(driftDbPath(repoRoot)), repoRoot);
 }
 
 function text(payload: unknown) {
@@ -40,8 +54,8 @@ function text(payload: unknown) {
  * for stale links.
  */
 export async function serve(repoRoot: string): Promise<void> {
-  const engine = openEngine(repoRoot);
-  const server = new McpServer({ name: "drift", version: "0.1.0" });
+  const engine = await openEngine(repoRoot);
+  const server = new McpServer({ name: "drift", version: "0.3.0" });
 
   server.registerTool(
     "drift_context",
@@ -95,6 +109,7 @@ export async function serve(repoRoot: string): Promise<void> {
           anchor: ev.link.anchorId,
           drift: ev.status === "stale" ? ev.drift : undefined,
           missing: ev.status === "broken" ? ev.missing : undefined,
+          movedTo: ev.movedTo,
         })),
       );
     },
@@ -114,9 +129,9 @@ export async function serve(repoRoot: string): Promise<void> {
       if (!link) return text({ error: `link not found: ${linkId}` });
       const ev = engine.evaluateLink(link);
       const symbol =
-        engine.codegraph.getSymbolById(link.symbolId) ??
-        engine.codegraph.findSymbol(link.symbolQualifiedName);
-      const source = symbol ? engine.codegraph.readSymbolSource(symbol) : null;
+        engine.symbols.getSymbolById(link.symbolId) ??
+        engine.symbols.findSymbol(link.symbolQualifiedName);
+      const source = symbol ? engine.symbols.readSymbolSource(symbol) : null;
       const anchor = engine.store.getAnchor(link.anchorId);
       return text({
         linkId,
@@ -127,7 +142,10 @@ export async function serve(repoRoot: string): Promise<void> {
         approvedBy: link.approvedBy,
         symbol: link.symbolQualifiedName,
         symbolSource: source,
-        symbolHashMatches: source !== null && hashCode(source) === link.approvedSymbolHash,
+        symbolHashMatches:
+          source !== null &&
+          symbol !== null &&
+          engine.hashSymbolSource(source, symbol.filePath) === link.approvedSymbolHash,
         anchor: link.anchorId,
         anchorBody: anchor?.body ?? null,
         normalizedSymbolPreview: source ? normalizeCode(source).slice(0, 400) : null,
@@ -165,6 +183,16 @@ export async function serve(repoRoot: string): Promise<void> {
     },
     async ({ minConfidence }) =>
       text(suggestLinks(engine, { minConfidence: minConfidence === "high" ? "high" : undefined })),
+  );
+
+  server.registerTool(
+    "drift_coverage",
+    {
+      description:
+        "Spec coverage metric: what fraction of the codebase's functions/classes have spec links, by kind, plus freshness of existing links. Use to gauge how documented an area is before relying on drift_context, or to report progress after linking work.",
+      inputSchema: {},
+    },
+    async () => text(coverage(engine)),
   );
 
   const transport = new StdioServerTransport();

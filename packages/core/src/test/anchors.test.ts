@@ -42,6 +42,20 @@ test("explicit drift-anchor comment overrides the derived slug", () => {
   assert.equal(anchors[0].id, "docs/x.md#custom-name");
 });
 
+test("drift-anchor comment only applies immediately above a heading (regression)", () => {
+  // Found by dogfooding: prose MENTIONING the comment syntax hijacked the
+  // slug of the NEXT section, silently renaming it.
+  const md = [
+    "## Spec Anchors",
+    "Override the slug with `<!-- drift-anchor: name -->` when ambiguous.",
+    "more prose",
+    "## Annotation Strategy",
+    "body",
+  ].join("\n");
+  const slugs = extractAnchors("docs/d.md", md).map((a) => a.slug);
+  assert.deepEqual(slugs, ["spec-anchors", "annotation-strategy"]);
+});
+
 test("duplicate headings get -1, -2 suffixes like GitHub", () => {
   const md = ["## Setup", "a", "## Setup", "b", "## Setup", "c"].join("\n");
   const slugs = extractAnchors("docs/x.md", md).map((a) => a.slug);

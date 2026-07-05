@@ -83,7 +83,7 @@ export function makeFixtureRepo(opts: {
     engine,
     write,
     cleanup() {
-      engine.codegraph.close();
+      engine.symbols.close();
       engine.store.close();
       rmSync(root, { recursive: true, force: true });
     },

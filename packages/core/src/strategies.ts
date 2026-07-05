@@ -45,12 +45,13 @@ const LINKABLE_KINDS = new Set([
 const MAX_ANNOTATION_DISTANCE = 5;
 
 /**
- * Strategy 1: lightweight code annotations.
- * Scans for `@spec: docs/auth.md#token-refresh` in comments on the lines
- * directly above a symbol. The symbol is whichever CodeGraph node starts
+ * Strategy 1: lightweight code annotations — `@spec:` followed by a spec
+ * anchor id (a docs path plus heading slug) in a comment on the lines
+ * directly above a symbol. The symbol is whichever indexed node starts
  * closest below the annotation line — preferring linkable kinds
  * (function/class/…) so an interposed type alias or constant doesn't
- * steal the link.
+ * steal the link. (This docstring deliberately avoids spelling out a
+ * literal example: the scanner would pick it up as a real annotation.)
  */
 const ANNOTATION_RE = /@spec:\s*([^\s*]+\.md#[\w-]+)/g;
 // non-global twin for one-off tests (a /g regex is stateful under .test())
@@ -83,6 +84,7 @@ function pickTarget(symbols: Symbol[], annotationLine: number): {
   return { target: nearest, skipped: [] };
 }
 
+// @spec: docs/design.md#annotation-strategy
 export function scanAnnotations(
   engine: DriftEngine,
   codeFiles: string[],
@@ -95,7 +97,7 @@ export function scanAnnotations(
     const abs = join(engine.repoRoot, rel);
     if (!existsSync(abs)) continue;
     const lines = readFileSync(abs, "utf8").split("\n");
-    const symbols = engine.codegraph.symbolsInFile(rel);
+    const symbols = engine.symbols.symbolsInFile(rel);
     scannedFiles++;
     if (symbols.length === 0) {
       if (lines.some((l) => ANNOTATION_TEST_RE.test(l))) {
@@ -183,7 +185,7 @@ export function syncDeclarations(
   const errors: string[] = [];
   for (const d of decls) {
     try {
-      const symbol = engine.codegraph.findSymbol(d.symbol);
+      const symbol = engine.symbols.findSymbol(d.symbol);
       if (!symbol) throw new Error(`symbol not found: ${d.symbol}`);
       const existing = engine.store.getLinkBySymbolAnchor(symbol.id, d.anchorId);
       if (existing) {

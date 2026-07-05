@@ -1,0 +1,22 @@
+# Dogfooding: drift checks its own spec/code links (docs/design.md) on
+# every push, using the builtin tree-sitter backend — no CodeGraph needed.
+name: drift
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  spec-links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run build
+      - name: Unit tests
+        run: npm test
+      - name: Spec/code links must be fresh
+        run: node packages/cli/dist/main.js check --check

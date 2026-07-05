@@ -1,0 +1,64 @@
+{
+  "name": "drift-vscode",
+  "displayName": "Drift — spec/code links",
+  "description": "Shows each function's spec link status (fresh/stale/broken) inline as CodeLens, with one-click approve and spec preview.",
+  "version": "0.1.0",
+  "private": true,
+  "publisher": "driftdocs",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "drift.approve",
+        "title": "Drift: Approve link (still correct)"
+      },
+      {
+        "command": "drift.relink",
+        "title": "Drift: Relink moved symbol"
+      },
+      {
+        "command": "drift.openSpec",
+        "title": "Drift: Open spec section"
+      },
+      {
+        "command": "drift.refresh",
+        "title": "Drift: Refresh link status"
+      }
+    ],
+    "configuration": {
+      "title": "Drift",
+      "properties": {
+        "drift.command": {
+          "type": "string",
+          "default": "npx --yes driftdocs",
+          "description": "How to invoke the drift CLI."
+        },
+        "drift.enableCodeLens": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show spec link status above linked symbols."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --external:vscode --format=cjs --platform=node --target=node18 --outfile=dist/extension.js",
+    "package": "npx --yes @vscode/vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0"
+  }
+}

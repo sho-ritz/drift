@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Symbol } from "./types.js";
+import type { SymbolIndex } from "./symbol-index.js";
 
 interface NodeRow {
   id: string;
@@ -19,7 +20,7 @@ interface NodeRow {
  * rather than re-parsing code). CodeGraph is distributed as a binary, so
  * the extension point is its SQLite database, never its process.
  */
-export class CodeGraphReader {
+export class CodeGraphReader implements SymbolIndex {
   private db: Database.Database;
 
   constructor(dbPath: string, private repoRoot: string) {

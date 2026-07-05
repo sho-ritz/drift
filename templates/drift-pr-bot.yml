@@ -19,8 +19,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Rebuild CodeGraph index
-        run: npx @colbymchenry/codegraph index
+      # Only needed when .drift/config.json says "backend": "codegraph".
+      # With the builtin tree-sitter backend (or the automatic fallback),
+      # delete this step — drift indexes the working tree by itself.
+      # - name: Rebuild CodeGraph index
+      #   run: npx @colbymchenry/codegraph index
       - name: Evaluate spec links
         id: drift
         run: |

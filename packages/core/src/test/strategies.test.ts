@@ -9,7 +9,7 @@ test("annotation binds past an interposed type alias to the function (regression
   // The bug found in the field: `// @spec:` above `type ProjectCardProps = ...`
   // followed by the component silently linked to the type alias.
   const code = [
-    "// @spec: docs/ui.md#project-card", // line 1
+    "// @spec" + ": docs/ui.md#project-card", // line 1
     "type ProjectCardProps = { id: string };", // line 2
     "export function ProjectCard(props: ProjectCardProps) {", // line 3
     "  return null;",
@@ -41,7 +41,7 @@ test("annotation binds past an interposed type alias to the function (regression
 
 test("annotation binding to a non-linkable kind warns instead of passing silently", (t) => {
   const code = [
-    "// @spec: docs/ui.md#projects",
+    "// @spec" + ": docs/ui.md#projects",
     "const projects = [];",
   ].join("\n");
   const fx = makeFixtureRepo({
@@ -65,7 +65,7 @@ test("annotation binding to a non-linkable kind warns instead of passing silentl
 });
 
 test("annotation far above its symbol warns about the distance", (t) => {
-  const lines = ["// @spec: docs/a.md#x"];
+  const lines = ["// @spec" + ": docs/a.md#x"];
   for (let i = 0; i < 10; i++) lines.push("");
   lines.push("function far() {}");
   const fx = makeFixtureRepo({
@@ -85,7 +85,7 @@ test("annotation far above its symbol warns about the distance", (t) => {
 });
 
 test("annotation with no symbol below it warns and is ignored", (t) => {
-  const code = ["function f() {}", "// @spec: docs/a.md#x  (trailing, nothing below)"].join("\n");
+  const code = ["function f() {}", "// @spec" + ": docs/a.md#x  (trailing, nothing below)"].join("\n");
   const fx = makeFixtureRepo({
     files: { "src/t.ts": code },
     nodes: [
@@ -104,7 +104,7 @@ test("annotation with no symbol below it warns and is ignored", (t) => {
 
 test("annotations in a file CodeGraph has not indexed warn", (t) => {
   const fx = makeFixtureRepo({
-    files: { "src/new.ts": "// @spec: docs/a.md#x\nfunction f() {}" },
+    files: { "src/new.ts": "// @spec" + ": docs/a.md#x\nfunction f() {}" },
     nodes: [], // file exists on disk but not in the index
   });
   t.after(() => fx.cleanup());

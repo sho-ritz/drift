@@ -201,6 +201,29 @@ export class DriftStore {
     this.logApproval(linkId, "approve", actor);
   }
 
+  /** Re-point a link at a renamed/moved symbol (anchor side untouched). */
+  relinkSymbol(
+    linkId: number,
+    target: {
+      symbolId: string;
+      symbolQualifiedName: string;
+      symbolFilePath: string;
+      approvedSymbolHash: string;
+    },
+    actor?: string,
+  ): void {
+    this.db
+      .prepare(
+        `UPDATE links SET symbol_id = ?, symbol_qualified_name = ?, symbol_file_path = ?,
+           approved_symbol_hash = ?, approved_at = ?, approved_by = ? WHERE id = ?`,
+      )
+      .run(
+        target.symbolId, target.symbolQualifiedName, target.symbolFilePath,
+        target.approvedSymbolHash, Date.now(), actor ?? null, linkId,
+      );
+    this.logApproval(linkId, "relink", actor);
+  }
+
   removeLink(linkId: number, actor?: string): void {
     this.logApproval(linkId, "remove", actor);
     this.db.prepare(`DELETE FROM links WHERE id = ?`).run(linkId);

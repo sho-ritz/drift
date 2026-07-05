@@ -1,0 +1,7 @@
+{
+  "docsDir": "docs",
+  "strategies": ["annotation", "mapping", "ai-suggested"],
+  "agents": ["claude-code"],
+  "backend": "builtin",
+  "codegraphDb": ".codegraph/codegraph.db"
+}
