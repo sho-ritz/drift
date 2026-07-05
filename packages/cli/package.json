@@ -1,6 +1,6 @@
 {
   "name": "driftdocs",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Keep specs and code provably in sync. A CodeGraph extension that links code symbols to spec sections, detects drift by hash comparison, and serves AI agents low-token context via MCP.",
   "keywords": [
     "documentation",
