@@ -47,13 +47,35 @@ function repoRootFor(fileDir: string): string | null {
   }
 }
 
+/**
+ * GUI apps on macOS/Linux don't inherit the user's shell PATH (no .zshrc/.bashrc
+ * sourcing), so tools installed via nvm/mise/volta/homebrew are often not found
+ * by a plain execFile. Running through a login+interactive shell picks up the
+ * same PATH the user gets in a terminal.
+ */
 function runDrift(root: string, args: string[], timeoutMs = 20_000): Promise<string> {
   const [cmd, ...base] = driftCommand();
   return new Promise((resolve, reject) => {
+    if (process.platform === "win32") {
+      execFile(
+        cmd,
+        [...base, ...args],
+        { cwd: root, timeout: timeoutMs, shell: true },
+        (err, stdout, stderr) => {
+          if (err && !stdout) reject(new Error(stderr.trim() || err.message));
+          else resolve(stdout);
+        },
+      );
+      return;
+    }
+    const shell = process.env.SHELL || "/bin/zsh";
+    const quoted = [cmd, ...base, ...args]
+      .map((a) => `'${a.replace(/'/g, `'\\''`)}'`)
+      .join(" ");
     execFile(
-      cmd,
-      [...base, ...args],
-      { cwd: root, timeout: timeoutMs, shell: process.platform === "win32" },
+      shell,
+      ["-ilc", quoted],
+      { cwd: root, timeout: timeoutMs },
       (err, stdout, stderr) => {
         if (err && !stdout) reject(new Error(stderr.trim() || err.message));
         else resolve(stdout);

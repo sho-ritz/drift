@@ -7,6 +7,7 @@ dist/
 .drift/*.db-wal
 .drift/*.db-shm
 obsidian-plugin/main.js
+vscode-extension/*.vsix
 packages/cli/templates/
 packages/cli/README.md
 packages/cli/*.tgz
