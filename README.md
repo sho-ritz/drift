@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="images/hero.png" alt="Drift" width="520">
+</p>
+
 # Drift
 
 [![npm](https://img.shields.io/npm/v/driftdocs)](https://www.npmjs.com/package/driftdocs)
